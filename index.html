@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/png" href="logo.png">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rythm: your activity tracker</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        :root {
+            --bg-color: #09090e; 
+            --card-bg: rgba(255, 255, 255, 0.03); 
+            --card-border: rgba(255, 255, 255, 0.08);
+            --accent-purple: #9d4edd;
+            --accent-pink: #ff1053;
+            --accent-cyan: #00f5d4;
+            --accent-green: #2ecc71; 
+            --gradient-primary: linear-gradient(135deg, var(--accent-purple), var(--accent-pink));
+            --text-main: #f8f9fa;
+            --text-muted: #8a8895;
+            --font-heading: 'Space Grotesk', sans-serif;
+            --font-body: 'Outfit', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color); color: var(--text-main); font-family: var(--font-body);
+            margin: 0; padding: 20px; background-attachment: fixed;
+            background-image: radial-gradient(circle at 15% 50%, rgba(157, 78, 221, 0.15), transparent 25%),
+                              radial-gradient(circle at 85% 30%, rgba(0, 245, 212, 0.1), transparent 25%);
+        }
+
+        h1, h2, h3, .timer-display { font-family: var(--font-heading); letter-spacing: -0.5px; margin-top: 0; }
+        .hud-container { max-width: 1200px; margin: 0 auto; }
+        .hud-header { border-bottom: 1px solid var(--card-border); padding-bottom: 10px; margin-bottom: 30px; text-align: center; }
+        .hud-header h1 { background: var(--gradient-primary); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size: 2.3rem; }
+
+        .section-title { color: var(--text-muted); font-size: 0.75rem; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 2px; text-align: center; margin-top: 30px; }
+
+        .bento-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 24px; padding: 24px; backdrop-filter: blur(16px); position: relative; transition: 0.3s; overflow: hidden; }
+
+        /* --- INSTANT GREEN GLOW MATRIX --- */
+        .matrix-wrapper { overflow-x: auto; padding-top: 70px; margin-bottom: 20px; min-height: 250px; }
+        .cyber-matrix { width: auto; margin: 0 auto; border-collapse: separate; border-spacing: 6px 6px; text-align: center; }
+        .cyber-matrix th { height: 60px; white-space: nowrap; font-size: 0.65rem; color: var(--text-muted); position: relative; vertical-align: bottom; min-width: 35px; }
+        .matrix-header-name { transform: rotate(-45deg); transform-origin: bottom left; position: absolute; left: 50%; bottom: 10px; display: block; width: 150px; text-align: left; font-weight: 600; text-transform: uppercase; }
+        .matrix-box { width: 22px; height: 22px; margin: 0 auto; background: rgba(255, 255, 255, 0.05); border-radius: 5px; transition: 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); border: 1px solid rgba(255,255,255,0.03); }
+        
+        /* The Glow Trigger */
+        .matrix-box.active { 
+            background: var(--accent-green); 
+            box-shadow: 0 0 18px var(--accent-green), inset 0 0 5px rgba(255,255,255,0.4); 
+            transform: scale(1.1); 
+            border-color: rgba(255,255,255,0.5); 
+        }
+        
+        .date-col { color: var(--text-muted); font-size: 0.7rem; text-align: right; padding-right: 15px !important; font-weight: 600; }
+
+        /* BARS & PROGRESS - UPDATED FOR MOBILE FLUIDITY */
+        .bento-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 20px; }
+        .timer-display { font-size: 2.5rem; text-align: center; margin: 5px 0; background: var(--gradient-primary); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .target-labels { display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 6px; }
+        .percent-tag { font-family: var(--font-heading); font-weight: 700; color: var(--accent-cyan); }
+        
+        .progress-bg { height: 8px; background: rgba(255,255,255,0.05); border-radius: 10px; overflow: hidden; }
+        .progress-fill { height: 100%; background: var(--gradient-primary); width: 0%; transition: 0.4s ease; }
+
+        /* Success States */
+        .target-complete .progress-fill { background: var(--accent-green) !important; box-shadow: 0 0 12px var(--accent-green); }
+        .target-complete .percent-tag { color: var(--accent-green); }
+
+        .manual-log-row { display: flex; gap: 8px; margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--card-border); }
+        .mini-input { background: rgba(0,0,0,0.4); border: 1px solid var(--card-border); color: white; padding: 8px; border-radius: 8px; width: 65px; font-size: 0.8rem; text-align: center; outline: none; flex: 1; }
+        .cyber-btn { background: var(--card-bg); border: 1px solid var(--card-border); color: white; padding: 10px 15px; border-radius: 12px; cursor: pointer; font-weight: bold; transition: 0.3s; font-size: 0.75rem; text-transform: uppercase; display: flex; justify-content: center; align-items: center; }
+        .cyber-btn:hover { background: var(--gradient-primary); }
+        
+        .chart-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 20px; margin-bottom: 40px; }
+        .line-graph-container { height: 350px; width: 100%; margin-bottom: 40px; }
+        .delete-btn { position: absolute; top: 15px; right: 15px; background: none; border: none; color: var(--text-muted); cursor: pointer; z-index: 10; font-size: 1.2rem; }
+
+        /* ADD ACTIVITY FLEX CONTAINER */
+        .add-activity-flex { display: flex; gap: 15px; flex-direction: row; }
+        
+        /* FOOTER GRID CONTAINER */
+        .footer-grid { max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr)); gap: 50px; }
+
+        /* --- MOBILE RESPONSIVE OVERRIDES --- */
+        @media (max-width: 600px) {
+            body { padding: 10px; }
+            .bento-card { padding: 15px; border-radius: 16px; }
+            .hud-header h1 { font-size: 1.8rem; }
+            .timer-display { font-size: 2rem; }
+            
+            /* Stack input fields vertically on phones */
+            .add-activity-flex { flex-direction: column; }
+            
+            /* Adjust matrix text so it doesn't overlap on tiny screens */
+            .cyber-matrix th { font-size: 0.55rem; }
+            .matrix-header-name { width: 110px; bottom: 8px; }
+            
+            /* Center the footer text on mobile */
+            .footer-grid { gap: 30px; text-align: center; }
+            .footer-grid > div:last-child { text-align: center !important; }
+            .footer-grid > div:last-child > div { display: flex; flex-direction: column; align-items: center; }
+            
+            /* Make mission statement slightly smaller */
+            .mission-text { font-size: 1rem !important; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="hud-container">
+        <header class="hud-header">
+            <img src="logo1.png" alt="Rythm Logo" style="height:50px;">
+        </header>
+
+        <div class="section-title">YOUR ACTIVITY</div>
+        <div class="bento-card" style="margin-bottom: 20px;">
+            <div class="matrix-wrapper">
+                <table class="cyber-matrix">
+                    <thead id="matrix-head"></thead>
+                    <tbody id="matrix-body"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="section-title">PROGRESS</div>
+        <div class="bento-card line-graph-container">
+            <canvas id="lineTrendChart"></canvas>
+        </div>
+
+        <div class="chart-row">
+            <div class="bento-card chart-card">
+                <h3>DAILY TASK (MINS)</h3>
+                <div style="height:180px; width:100%"><canvas id="dailyCircle"></canvas></div>
+                <div style="height:100px; width:100%"><canvas id="dailyBar"></canvas></div>
+            </div>
+            <div class="bento-card chart-card">
+                <h3>MONTHLY TASK (HRS)</h3>
+                <div style="height:180px; width:100%"><canvas id="monthlyCircle"></canvas></div>
+                <div style="height:100px; width:100%"><canvas id="monthlyBar"></canvas></div>
+            </div>
+        </div>
+
+        <div class="section-title">ACTIVITIES</div>
+        <div id="activity-list" class="bento-grid"></div>
+
+        <div class="section-title">ADD NEW ACTIVITY</div>
+        <div class="bento-card" style="margin-top: 10px; max-width: 600px; margin-left: auto; margin-right: auto;">
+            <div class="add-activity-flex">
+                <input type="text" id="name" placeholder="Activity Name" style="background:rgba(0,0,0,0.3); border:1px solid var(--card-border); color:white; padding:14px; border-radius:12px; flex:2;">
+                <input type="number" id="d-target" placeholder="Goal (Mins)" style="background:rgba(0,0,0,0.3); border:1px solid var(--card-border); color:white; padding:14px; border-radius:12px; flex:1;">
+                <button class="cyber-btn" onclick="addActivity()" style="padding: 14px;">ADD</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const STORAGE_KEY = 'protocol_v22';
+        let appData = JSON.parse(localStorage.getItem(STORAGE_KEY)) || { activities: {}, history: {} };
+        let activeTimers = {}; let charts = {};
+        const colors = ['#00f5d4', '#9d4edd', '#ff1053', '#fee440', '#00bbf9', '#f15bb5'];
+
+        function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(appData)); updateCharts(); }
+
+        // Centralized function to check dates, wipe old data, and repair NaN corruption
+        function checkDateAndReset() {
+            const now = new Date();
+            const today = now.toISOString().split('T')[0];
+            const currentMonth = now.toISOString().slice(0, 7);
+            let dataChanged = false;
+
+            if (!appData.lastLogin) { appData.lastLogin = today; dataChanged = true; }
+            if (!appData.lastMonth) { appData.lastMonth = currentMonth; dataChanged = true; }
+
+            // Day Reset
+            if (appData.lastLogin !== today) {
+                Object.keys(appData.activities).forEach(id => appData.activities[id].timeToday = 0);
+                appData.lastLogin = today;
+                dataChanged = true;
+            }
+
+            // Month Reset
+            if (appData.lastMonth !== currentMonth) {
+                Object.keys(appData.activities).forEach(id => appData.activities[id].timeMonth = 0);
+                appData.lastMonth = currentMonth;
+                dataChanged = true;
+            }
+
+            // Fix for NaN corruption on old tasks breaking the monthly chart
+            Object.keys(appData.activities).forEach(id => {
+                if (isNaN(appData.activities[id].timeMonth) || appData.activities[id].timeMonth == null) {
+                    appData.activities[id].timeMonth = 0;
+                    dataChanged = true;
+                }
+                if (isNaN(appData.activities[id].timeToday) || appData.activities[id].timeToday == null) {
+                    appData.activities[id].timeToday = 0;
+                    dataChanged = true;
+                }
+            });
+
+            if (dataChanged) save();
+            return dataChanged;
+        }
+
+        // Run date check whenever the user brings the tab back into focus
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && checkDateAndReset()) {
+                render(); 
+            }
+        });
+
+        function startTimer(id) {
+            if(activeTimers[id]) return;
+            
+            checkDateAndReset(); 
+            
+            const today = new Date().toISOString().split('T')[0];
+            if (!appData.history[today]) appData.history[today] = {};
+            if (!appData.history[today][id]) appData.history[today][id] = 0.001; 
+            renderMatrix();
+
+            activeTimers[id] = setInterval(() => {
+                const currentToday = new Date().toISOString().split('T')[0];
+                if (appData.lastLogin !== currentToday) {
+                    checkDateAndReset();
+                    render();
+                }
+
+                if (!appData.history[currentToday]) appData.history[currentToday] = {};
+
+                appData.activities[id].timeToday++;
+                appData.activities[id].timeMonth++;
+                appData.history[currentToday][id] = parseFloat((appData.activities[id].timeToday / 60).toFixed(2));
+                
+                updateActivityUI(id);
+                if (appData.activities[id].timeToday % 30 === 0) { updateCharts(); save(); }
+            }, 1000);
+        }
+
+        function stopTimer(id) { clearInterval(activeTimers[id]); delete activeTimers[id]; save(); renderMatrix(); }
+
+        function updateActivityUI(id) {
+            const act = appData.activities[id];
+            const dMins = act.timeToday/60;
+            const dPerc = Math.min((dMins/act.dTarget)*100, 100).toFixed(0);
+            const timerEl = document.getElementById(`timer-${id}`);
+            if(timerEl) {
+                timerEl.textContent = new Date(act.timeToday * 1000).toISOString().substr(11, 8);
+                document.getElementById(`d-lbl-${id}`).textContent = `${dMins.toFixed(1)} / ${act.dTarget} MINS`;
+                document.getElementById(`d-perc-${id}`).textContent = `${dPerc}%`;
+                document.getElementById(`d-bar-${id}`).style.width = dPerc + '%';
+                const container = document.getElementById(`target-cont-${id}`);
+                if (dMins >= act.dTarget) container.classList.add('target-complete');
+                else container.classList.remove('target-complete');
+            }
+        }
+
+        function renderMatrix() {
+            const head = document.getElementById('matrix-head');
+            const body = document.getElementById('matrix-body');
+            const ids = Object.keys(appData.activities);
+            if (ids.length === 0) return;
+
+            head.innerHTML = `<tr><th class="date-col">DATE</th>${ids.map(id => `<th><span class="matrix-header-name">${appData.activities[id].name}</span></th>`).join('')}</tr>`;
+            body.innerHTML = '';
+            for(let i=0; i<7; i++) {
+                const d = new Date(); d.setDate(d.getDate() - i);
+                const ds = d.toISOString().split('T')[0];
+                const label = i === 0 ? 'TODAY' : ds.split('-').slice(1).join('/');
+                let row = `<tr><td class="date-col">${label}</td>`;
+                ids.forEach(id => {
+                    const hasProgress = (appData.history[ds] && appData.history[ds][id] > 0);
+                    row += `<td><div class="matrix-box ${hasProgress ? 'active' : ''}"></div></td>`;
+                });
+                body.innerHTML += row + `</tr>`;
+            }
+        }
+
+        function addActivity() {
+            const nameInput = document.getElementById('name');
+            const targetInput = document.getElementById('d-target');
+            
+            const name = nameInput.value.toUpperCase();
+            const dailyMins = parseInt(targetInput.value);
+            
+            if(!name || !dailyMins) return;
+            
+            const id = "id_" + Date.now();
+            appData.activities[id] = { name, timeToday: 0, timeMonth: 0, dTarget: dailyMins };
+            
+            nameInput.value = '';
+            targetInput.value = '';
+            
+            save(); 
+            render();
+        }
+
+        function addManualTime(id) {
+            checkDateAndReset(); 
+            const input = document.getElementById(`manual-${id}`);
+            const mins = parseFloat(input.value);
+            if(!mins) return;
+            appData.activities[id].timeToday += (mins * 60);
+            appData.activities[id].timeMonth += (mins * 60);
+            const today = new Date().toISOString().split('T')[0];
+            if (!appData.history[today]) appData.history[today] = {};
+            appData.history[today][id] = parseFloat((appData.activities[id].timeToday / 60).toFixed(2));
+            input.value = ''; save(); render();
+        }
+
+        function deleteAct(id) { 
+            if(confirm("Terminate?")) { 
+                delete appData.activities[id]; 
+                Object.keys(appData.history).forEach(date => {
+                    if (appData.history[date][id] !== undefined) delete appData.history[date][id];
+                });
+                save(); 
+                render(); 
+            } 
+        }
+
+        function render() {
+            const list = document.getElementById('activity-list');
+            list.innerHTML = '';
+            Object.keys(appData.activities).forEach(id => {
+                const act = appData.activities[id];
+                const card = document.createElement('div');
+                card.className = 'bento-card';
+                card.innerHTML = `
+                    <button class="delete-btn" onclick="deleteAct('${id}')">✕</button>
+                    <h3>> ${act.name}</h3>
+                    <div class="timer-display" id="timer-${id}">00:00:00</div>
+                    <div class="target-container" id="target-cont-${id}">
+                        <div class="target-labels">
+                            <span>GOAL</span> <span id="d-lbl-${id}"></span> <span class="percent-tag" id="d-perc-${id}">0%</span>
+                        </div>
+                        <div class="progress-bg"><div class="progress-fill" id="d-bar-${id}"></div></div>
+                    </div>
+                    <div style="display:flex; gap:10px; margin-top:15px;">
+                        <button class="cyber-btn" style="flex:1" onclick="startTimer('${id}')">START</button>
+                        <button class="cyber-btn" style="flex:1" onclick="stopTimer('${id}')">STOP</button>
+                    </div>
+                    <div class="manual-log-row">
+                        <input type="number" id="manual-${id}" class="mini-input" placeholder="(in mins)">
+                        <button class="cyber-btn" style="flex:1" onclick="addManualTime('${id}')">ENTER</button>
+                    </div>
+                `;
+                list.appendChild(card);
+                updateActivityUI(id);
+            });
+            renderMatrix(); updateCharts();
+        }
+
+        function initCharts() {
+            const shared = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } };
+            charts.dCircle = new Chart(document.getElementById('dailyCircle'), { type: 'doughnut', data: {}, options: {...shared, cutout: '75%'} });
+            charts.dBar = new Chart(document.getElementById('dailyBar'), { type: 'bar', data: {}, options: { ...shared, indexAxis: 'y', scales: { x: { display: false }, y: { ticks: { color: '#8a8895' } } } } });
+            charts.mCircle = new Chart(document.getElementById('monthlyCircle'), { type: 'doughnut', data: {}, options: {...shared, cutout: '75%'} });
+            charts.mBar = new Chart(document.getElementById('monthlyBar'), { type: 'bar', data: {}, options: { ...shared, indexAxis: 'y', scales: { x: { display: false }, y: { ticks: { color: '#8a8895' } } } } });
+            charts.line = new Chart(document.getElementById('lineTrendChart'), {
+                type: 'line', data: {}, options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: true, labels: { color: '#8a8895' } } },
+                    scales: { x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#8a8895' } }, y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#8a8895' } } }
+                }
+            });
+            updateCharts();
+        }
+
+        function updateCharts() {
+            const keys = Object.keys(appData.activities);
+            const labels = keys.map(k => appData.activities[k].name);
+            
+            // Get exact days in the current month dynamically
+            const now = new Date();
+            const daysInCurrentMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+            
+            // 1. Calculate Daily Data & Targets
+            const dData = keys.map(k => (appData.activities[k].timeToday || 0) / 60);
+            const dTargets = keys.map(k => appData.activities[k].dTarget || 0);
+            const totalDTarget = dTargets.reduce((a, b) => a + b, 0);
+            const totalDDone = dData.reduce((a, b) => a + b, 0);
+            const dRemaining = Math.max(0, totalDTarget - totalDDone);
+            
+            const maxDScale = Math.max(...dTargets, ...dData, 1); 
+
+            // 2. Calculate Monthly Data & Targets
+            const mData = keys.map(k => (appData.activities[k].timeMonth || 0) / 3600);
+            const mTargets = keys.map(k => ((appData.activities[k].dTarget || 0) * daysInCurrentMonth) / 60);
+            const totalMTarget = mTargets.reduce((a, b) => a + b, 0);
+            const totalMDone = mData.reduce((a, b) => a + b, 0);
+            const mRemaining = Math.max(0, totalMTarget - totalMDone);
+            
+            const maxMScale = Math.max(...mTargets, ...mData, 1);
+
+            const bg = keys.map((_, i) => colors[i % colors.length]);
+            const emptyColor = 'rgba(255,255,255,0.05)'; 
+
+            // Update Circles
+            const setCircle = (chart, data, remaining, target) => { 
+                if (target === 0 || keys.length === 0) {
+                    chart.data = { labels: ['No Activity'], datasets: [{ data: [1], backgroundColor: [emptyColor], borderWidth: 0 }] };
+                } else {
+                    chart.data = { 
+                        labels: [...labels, 'Remaining'], 
+                        datasets: [{ 
+                            data: [...data, remaining], 
+                            backgroundColor: [...bg, emptyColor], 
+                            borderWidth: 0 
+                        }] 
+                    }; 
+                }
+                chart.update(); 
+            };
+
+            // Update Bars
+            const setBar = (chart, data, maxScale) => { 
+                chart.options.scales.x.max = maxScale; 
+                chart.data = { labels, datasets: [{ data, backgroundColor: bg, barPercentage: 0.4, borderRadius: 4 }] }; 
+                chart.update(); 
+            };
+
+            if(charts.dCircle) {
+                setCircle(charts.dCircle, dData, dRemaining, totalDTarget); 
+                setBar(charts.dBar, dData, maxDScale);
+                
+                setCircle(charts.mCircle, mData, mRemaining, totalMTarget); 
+                setBar(charts.mBar, mData, maxMScale);
+                
+                // Line chart history
+                const dL = []; for(let i=6; i>=0; i--) { const d = new Date(); d.setDate(d.getDate() - i); dL.push(d.toISOString().split('T')[0]); }
+                charts.line.data.labels = dL;
+                charts.line.data.datasets = keys.map((id, i) => ({
+                    label: appData.activities[id].name,
+                    data: dL.map(date => appData.history[date] ? (appData.history[date][id] || 0) : 0),
+                    borderColor: colors[i % colors.length], fill: true, tension: 0.4
+                }));
+                charts.line.update();
+            }
+        }
+        
+        window.onload = () => {
+            checkDateAndReset();
+            initCharts();
+            render();
+        };
+    </script>
+    <br><br><br><br><br><br><br><br><br><br><br><br>
+<section style="margin: 80px auto 40px; max-width: 1200px; padding: 0 20px;">
+    <div class="bento-card" style="background: linear-gradient(145deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%); border: 1px solid rgba(157, 78, 221, 0.2); padding: 60px 40px; text-align: center; position: relative; border-radius: 40px;">
+        
+        <h2 style="color: var(--accent-cyan); font-size: 0.8rem; letter-spacing: 5px; margin-bottom: 30px; font-family: var(--font-heading); opacity: 0.8;">|| MISSION:-</h2>
+        
+        <p class="mission-text" style="color: var(--text-main); font-size: 1.2rem; line-height: 1.8; max-width: 950px; margin: 0 auto; font-family: var(--font-body); font-weight: 300;">
+            <span style="color: var(--accent-purple); font-weight: 700; letter-spacing: 1px;">RYTHM</span> was conceptualized and engineered by 
+            <span style="background: var(--gradient-primary); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 700;">Aman Chaurasiya</span> 
+            as a high-fidelity interface for elite habit tracking and time optimization. Built on the principles of visual feedback and data-driven discipline, this system transforms abstract effort into a glowing grid of progress. 
+            <br><br>
+            Under <span style="color: var(--accent-cyan); font-weight: 600;">Aman Chaurasiya’s</span> vision, the protocol serves as more than just a timer; it is a digital cockpit designed to eliminate friction, visualize consistency, and empower the user to dominate their daily directives with <span style="color: var(--accent-green); text-shadow: 0 0 10px rgba(46, 204, 113, 0.3);">surgical precision</span>.
+        </p>
+
+        <div style="margin-top: 40px; display: flex; justify-content: center; align-items: center; gap: 15px; opacity: 0.3;">
+            <div style="width: 100px; height: 1px; background: linear-gradient(to right, transparent, var(--text-muted));"></div>
+            <div style="width: 8px; height: 8px; border: 1px solid var(--accent-purple); transform: rotate(45deg);"></div>
+            <div style="width: 100px; height: 1px; background: linear-gradient(to left, transparent, var(--text-muted));"></div>
+        </div>
+    </div>
+</section>
+
+<footer style="padding: 60px 20px; border-top: 1px solid var(--card-border); background: rgba(0,0,0,0.4); backdrop-filter: blur(20px);">
+    <div class="footer-grid">
+        
+        <div>
+            <h3 style="color: var(--accent-cyan); font-size: 0.85rem; letter-spacing: 2px; margin-bottom: 20px; font-family: var(--font-heading);">|| ABOUT Us:-</h3>
+            <p style="color: var(--text-muted); font-size: 0.95rem; line-height: 1.6;">
+                We specialize in developing low-friction, high-impact productivity tools. 
+                <span style="color: var(--text-main);">Aman Chaurasiya</span> is a technical architect focused on bridging the gap between human psychology and digital performance tracking. RYTHM is the flagship result of this pursuit.
+            </p>
+        </div>
+
+        <div style="text-align: center;">
+            <h3 style="color: var(--accent-purple); font-size: 0.85rem; letter-spacing: 2px; margin-bottom: 25px; font-family: var(--font-heading);">|| CONTACT Us:-</h3>
+            <div style="display: flex; gap: 20px; justify-content: center;">
+                <style>
+                    .social-link { transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); filter: drop-shadow(0 0 2px rgba(0,0,0,0.5)); }
+                    .social-link:hover { transform: translateY(-8px) scale(1.1); filter: drop-shadow(0 0 12px var(--accent-cyan)); }
+                </style>
+                
+                <a href="mailto:amanchaurasiya711@gmail.com" class="social-link">
+                    <img width="42" src="https://img.icons8.com/3d-fluency/94/mail.png" alt="mail">
+                </a>
+                <a href="https://www.linkedin.com/in/aman-chaurasiya-ba8b12385" target="_blank" class="social-link">
+                    <img width="42" src="https://img.icons8.com/3d-fluency/94/linkedin--v2.png" alt="linkedin">
+                </a> 
+                <a href="https://github.com/amanchaurasiya711-tech" target="_blank" class="social-link">
+                    <img width="42" src="https://img.icons8.com/3d-fluency/94/github.png" alt="github">
+                </a>
+                <a href="https://www.instagram.com/amanchaurasiya._/" target="_blank" class="social-link">
+                    <img width="42" src="https://img.icons8.com/3d-fluency/94/instagram-new.png" alt="instagram">
+                </a>
+            </div>
+        </div>
+
+        <div style="text-align: right;">
+            <div>
+                <div style="font-size: 0.65rem; color: var(--text-muted); letter-spacing: 2px; margin-bottom: 5px;">DEVELOPER:</div>
+                <div style="font-family: var(--font-heading); font-size: 1.4rem; color: var(--text-main); font-weight: 700; letter-spacing: -0.5px;">AMAN CHAURASIYA</div>
+            </div>
+            
+            <div style="margin-top: 20px;">
+                <div style="display: inline-flex; align-items: center; gap: 8px; color: var(--accent-green); font-size: 0.7rem; font-weight: bold; border: 1px solid rgba(46, 204, 113, 0.2); padding: 5px 12px; border-radius: 20px;">
+                    <span style="width: 6px; height: 6px; background: var(--accent-green); border-radius: 50%; box-shadow: 0 0 8px var(--accent-green);"></span>
+                    RYTHM1.0_STABLE
+                </div>
+                <div style="font-size: 0.65rem; color: var(--text-muted); margin-top: 10px;">© 2026 RYTHM || by AMAN_CHAURASIYA<br>all rights reserved.</div>
+            </div>
+        </div>
+    </div>
+</footer>
+</body>
+</html>
